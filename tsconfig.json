@@ -20,5 +20,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "animated_highlight_example (2).tsx"]
+  "include": ["src"]
 }

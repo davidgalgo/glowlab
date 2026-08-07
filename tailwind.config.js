@@ -2,8 +2,7 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-    "./animated_highlight_example (2).tsx"
+    "./src/**/*.{js,ts,jsx,tsx}"
   ],
   theme: {
     extend: {},

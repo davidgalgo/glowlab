@@ -1,4 +1,4 @@
-import AnimatedHighlightApp from "../animated_highlight_example (2)";
+import AnimatedHighlightApp from "./AnimatedHighlight";
 
 export default function App() {
   return <AnimatedHighlightApp />;
