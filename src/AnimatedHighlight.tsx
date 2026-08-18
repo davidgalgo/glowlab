@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon, Copy, Check, Github } from "lucide-react";
+import AnimatedTypingInput from "./AnimatedTypingInput";
+import TypingInputCode from "./AnimatedTypingInput?raw";
 
 interface MagneticButtonProps {
   children: React.ReactNode;
@@ -49,16 +51,20 @@ function MagneticButton({ children, onClick, ariaLabel, isDark, radius = 60 }: M
       window.addEventListener('resize', measure);
     }
 
+    const reset = () => {
+      isHovered = false;
+      el.classList.remove('show-light');
+      target.tx = 0;
+      target.ty = 0;
+      target.sx = 1;
+      target.sy = 1;
+    };
+
     const handlePointerMove = (e: PointerEvent) => {
       // Don't pull magnetic button when user is actively selecting text
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) {
-        isHovered = false;
-        el.classList.remove('show-light');
-        target.tx = 0;
-        target.ty = 0;
-        target.sx = 1;
-        target.sy = 1;
+        reset();
         return;
       }
 
@@ -85,12 +91,7 @@ function MagneticButton({ children, onClick, ariaLabel, isDark, radius = 60 }: M
         el.style.setProperty('--lightX', `${lightX}%`);
         el.style.setProperty('--lightY', `${lightY}%`);
       } else {
-        isHovered = false;
-        el.classList.remove('show-light');
-        target.tx = 0;
-        target.ty = 0;
-        target.sx = 1;
-        target.sy = 1;
+        reset();
       }
     };
 
@@ -108,14 +109,15 @@ function MagneticButton({ children, onClick, ariaLabel, isDark, radius = 60 }: M
         target.sx = hoverScale;
         target.sy = hoverScale;
       } else {
-        target.sx = 1;
-        target.sy = 1;
-        target.tx = 0;
-        target.ty = 0;
+        reset();
       }
     };
 
     window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerleave', reset);
+    document.addEventListener('mouseleave', reset);
+    window.addEventListener('scroll', measure, { passive: true });
+    
     el.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
@@ -148,6 +150,9 @@ function MagneticButton({ children, onClick, ariaLabel, isDark, radius = 60 }: M
       if (ro) ro.disconnect();
       window.removeEventListener('resize', measure);
       window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerleave', reset);
+      document.removeEventListener('mouseleave', reset);
+      window.removeEventListener('scroll', measure);
       el.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
@@ -813,13 +818,21 @@ function AnimatedSelectionHighlight({ children, isDark }) {
 
 export default function App() {
   const [isDark, setIsDark] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
+  const [isCopiedHighlight, setIsCopiedHighlight] = useState(false);
+  const [isCopiedInput, setIsCopiedInput] = useState(false);
   const [menuState, setMenuState] = useState({ isOpen: false, x: 0, y: 0 });
 
-  const handleCopyCode = useCallback(() => {
+  const handleCopyHighlight = useCallback(() => {
     navigator.clipboard.writeText(COMPONENT_CODE).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2500);
+      setIsCopiedHighlight(true);
+      setTimeout(() => setIsCopiedHighlight(false), 2500);
+    });
+  }, []);
+
+  const handleCopyInput = useCallback(() => {
+    navigator.clipboard.writeText(TypingInputCode).then(() => {
+      setIsCopiedInput(true);
+      setTimeout(() => setIsCopiedInput(false), 2500);
     });
   }, []);
 
@@ -852,6 +865,17 @@ export default function App() {
         MozOsxFontSmoothing: 'grayscale',
       }}
     >
+      {/* GitHub Button */}
+      <div className="absolute top-6 left-6 z-50">
+        <MagneticButton 
+          onClick={() => window.open("https://github.com/davidgalgo/IOS-26-Highlight-Component", "_blank", "noopener,noreferrer")}
+          ariaLabel="View source code on GitHub" 
+          isDark={isDark}
+        >
+          <Github size={22} />
+        </MagneticButton>
+      </div>
+
       {/* Theme Toggle Button */}
       <div className="absolute top-6 right-6 z-50">
         <MagneticButton 
@@ -863,7 +887,7 @@ export default function App() {
         </MagneticButton>
       </div>
 
-      <div className="w-full max-w-[576px] px-6 py-8 my-auto box-border flex flex-col justify-center">
+      <div className="w-full max-w-[576px] px-6 py-32 my-auto box-border flex flex-col justify-center">
         
         {/* Top Decorative Line */}
         <div className="flex flex-col items-center mb-10 md:mb-12">
@@ -908,87 +932,132 @@ export default function App() {
           </div>
         </AnimatedSelectionHighlight>
 
-        {/* Action Buttons: Copy Code & GitHub Link */}
-        <div className="mt-8 md:mt-12 flex flex-row items-center justify-center gap-8">
-          {/* Copy Code Button */}
-          <div className="flex flex-col items-center">
-            <MagneticButton 
-              onClick={handleCopyCode}
-              ariaLabel="Copy component code"
-              isDark={isDark}
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                {isCopied ? (
-                  <motion.div key="check"
-                    initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
-                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ display: 'flex' }}
-                  >
-                    <Check size={22} />
-                  </motion.div>
-                ) : (
-                  <motion.div key="copy"
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.5 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ display: 'flex' }}
-                  >
-                    <Copy size={22} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </MagneticButton>
-            <div style={{ height: '22px', overflow: 'hidden', marginTop: '12px', position: 'relative' }}>
-              <AnimatePresence mode="wait" initial={false}>
-                {isCopied ? (
-                  <motion.span
-                    key="copied"
-                    initial={{ y: -12, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 12, opacity: 0 }}
-                    transition={{ duration: 0.22, ease: 'easeOut' }}
-                    className={`text-[11px] leading-[125%] uppercase font-semibold transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
-                    style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block', opacity: 0.7 }}
-                  >
-                    Copied!
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="code"
-                    initial={{ y: -12, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 12, opacity: 0 }}
-                    transition={{ duration: 0.22, ease: 'easeOut' }}
-                    className={`text-[11px] leading-[125%] uppercase font-semibold opacity-40 transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
-                    style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block' }}
-                  >
-                    Code
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </div>
+        {/* Copy Code Button for Highlight Component */}
+        <div className="mt-8 mb-16 flex flex-col items-center">
+          <MagneticButton 
+            onClick={handleCopyHighlight}
+            ariaLabel="Copy highlight component code"
+            isDark={isDark}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedHighlight ? (
+                <motion.div key="check"
+                  initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Check size={22} />
+                </motion.div>
+              ) : (
+                <motion.div key="copy"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Copy size={22} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </MagneticButton>
+          <div style={{ height: '22px', overflow: 'hidden', marginTop: '12px', position: 'relative' }}>
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedHighlight ? (
+                <motion.span
+                  key="copied"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block', opacity: 0.7 }}
+                >
+                  Copied!
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="code"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold opacity-40 transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block' }}
+                >
+                  Code
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
+        </div>
 
-          {/* GitHub Button */}
-          <div className="flex flex-col items-center">
-            <MagneticButton 
-              onClick={() => window.open("https://github.com/davidgalgo/IOS-26-Highlight-Component", "_blank", "noopener,noreferrer")}
-              ariaLabel="View source code on GitHub" 
-              isDark={isDark}
-            >
-              <Github size={22} />
-            </MagneticButton>
-            <div style={{ height: '22px', marginTop: '12px' }}>
-              <span 
-                className={`text-[11px] leading-[125%] uppercase font-semibold opacity-40 transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
-                style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block' }}
-              >
-                GitHub
-              </span>
-            </div>
+        {/* New Component Inserted Below Existing */}
+        <div className="w-full">
+          <AnimatedTypingInput isDark={isDark} />
+        </div>
+
+        {/* Copy Code Button for Typing Input Component */}
+        <div className="mt-8 flex flex-col items-center">
+          <MagneticButton 
+            onClick={handleCopyInput}
+            ariaLabel="Copy input component code"
+            isDark={isDark}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedInput ? (
+                <motion.div key="check"
+                  initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Check size={22} />
+                </motion.div>
+              ) : (
+                <motion.div key="copy"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Copy size={22} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </MagneticButton>
+          <div style={{ height: '22px', overflow: 'hidden', marginTop: '12px', position: 'relative' }}>
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedInput ? (
+                <motion.span
+                  key="copied"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block', opacity: 0.7 }}
+                >
+                  Copied!
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="code"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold opacity-40 transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block' }}
+                >
+                  Code
+                </motion.span>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
