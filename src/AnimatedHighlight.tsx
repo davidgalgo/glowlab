@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon, Copy, Check, Github } from "lucide-react";
 import AnimatedTypingInput from "./AnimatedTypingInput";
 import TypingInputCode from "./AnimatedTypingInput?raw";
+import AnimatedChat from "./AnimatedChat";
+import ChatCode from "./AnimatedChat?raw";
 
 interface MagneticButtonProps {
   children: React.ReactNode;
@@ -820,6 +822,7 @@ export default function App() {
   const [isDark, setIsDark] = useState(false);
   const [isCopiedHighlight, setIsCopiedHighlight] = useState(false);
   const [isCopiedInput, setIsCopiedInput] = useState(false);
+  const [isCopiedChat, setIsCopiedChat] = useState(false);
   const [menuState, setMenuState] = useState({ isOpen: false, x: 0, y: 0 });
 
   const handleCopyHighlight = useCallback(() => {
@@ -833,6 +836,13 @@ export default function App() {
     navigator.clipboard.writeText(TypingInputCode).then(() => {
       setIsCopiedInput(true);
       setTimeout(() => setIsCopiedInput(false), 2500);
+    });
+  }, []);
+
+  const handleCopyChat = useCallback(() => {
+    navigator.clipboard.writeText(ChatCode).then(() => {
+      setIsCopiedChat(true);
+      setTimeout(() => setIsCopiedChat(false), 2500);
     });
   }, []);
 
@@ -1033,6 +1043,73 @@ export default function App() {
           <div style={{ height: '22px', overflow: 'hidden', marginTop: '12px', position: 'relative' }}>
             <AnimatePresence mode="wait" initial={false}>
               {isCopiedInput ? (
+                <motion.span
+                  key="copied"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block', opacity: 0.7 }}
+                >
+                  Copied!
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="code"
+                  initial={{ y: -12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 12, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className={`text-[11px] leading-[125%] uppercase font-semibold opacity-40 transition-colors duration-500 ${isDark ? 'text-white' : 'text-[#121212]'}`}
+                  style={{ fontFamily: '"Inter", system-ui, sans-serif', display: 'block' }}
+                >
+                  Code
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Animated Chat Component */}
+        <div className="w-full">
+          <AnimatedChat isDark={isDark} />
+        </div>
+
+        {/* Copy Code Button for Chat Component */}
+        <div className="mt-8 flex flex-col items-center">
+          <MagneticButton 
+            onClick={handleCopyChat}
+            ariaLabel="Copy chat component code"
+            isDark={isDark}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedChat ? (
+                <motion.div key="check"
+                  initial={{ opacity: 0, scale: 0.5, rotate: -15 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Check size={22} />
+                </motion.div>
+              ) : (
+                <motion.div key="copy"
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.5 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex' }}
+                >
+                  <Copy size={22} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </MagneticButton>
+          <div style={{ height: '22px', overflow: 'hidden', marginTop: '12px', position: 'relative' }}>
+            <AnimatePresence mode="wait" initial={false}>
+              {isCopiedChat ? (
                 <motion.span
                   key="copied"
                   initial={{ y: -12, opacity: 0 }}
