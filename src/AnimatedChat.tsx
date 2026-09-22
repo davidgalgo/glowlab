@@ -3,14 +3,10 @@ import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { Phone, Trash2, ExternalLink } from 'lucide-react';
 
 const suggestions = [
-  "Why not just use AI?",
-  "Let's make a deal! 🎉",
   "This UI looks so cool! 🔥",
-  "How much does a website cost?",
-  "How does the referral system work?",
-  "What does the process look like?",
-  "How long does a project take?",
-  "How does maintenance work?"
+  "Make this UI celebrate! 🎉",
+  "Send some love! ❤️",
+  "Show me some magic! ✨"
 ];
 
 interface Message {
@@ -207,12 +203,172 @@ function ScreenEffectsCanvas({
   );
 }
 
+interface ElasticMessageBubbleProps {
+  message: Message;
+  isUser: boolean;
+  isDark: boolean;
+  isLastInGroup: boolean;
+  isTapbackOpen: boolean;
+  onOpenTapback: (id: string) => void;
+  onCloseTapback: () => void;
+  onLongPressStart: (id: string) => void;
+  onLongPressCancel: () => void;
+  triggerHaptic: (ms: number) => void;
+}
+
+function ElasticMessageBubble({
+  message,
+  isUser,
+  isDark,
+  isLastInGroup,
+  isTapbackOpen,
+  onOpenTapback,
+  onCloseTapback,
+  onLongPressStart,
+  onLongPressCancel,
+  triggerHaptic
+}: ElasticMessageBubbleProps) {
+  const hasDraggedRef = useRef(false);
+  const bubbleColor = isUser ? '#007AFF' : isDark ? '#2C2C2E' : '#E5E5EA';
+
+  return (
+    <div className="relative max-w-[80%] select-none">
+      <motion.div
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.06}
+        dragTransition={{
+          bounceStiffness: 750,
+          bounceDamping: 32
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          hasDraggedRef.current = false;
+        }}
+        onDragStart={() => {
+          hasDraggedRef.current = true;
+          onLongPressCancel();
+          if (isTapbackOpen) {
+            onCloseTapback();
+          }
+        }}
+        onDragEnd={() => {
+          triggerHaptic(12);
+          setTimeout(() => {
+            hasDraggedRef.current = false;
+          }, 80);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onOpenTapback(message.id);
+          triggerHaptic(25);
+        }}
+        onDoubleClick={() => {
+          if (!hasDraggedRef.current) {
+            onOpenTapback(message.id);
+            triggerHaptic(25);
+          }
+        }}
+        onTouchStart={() => onLongPressStart(message.id)}
+        onTouchEnd={onLongPressCancel}
+        onMouseDown={() => onLongPressStart(message.id)}
+        onMouseUp={onLongPressCancel}
+        onMouseLeave={onLongPressCancel}
+        whileDrag={{
+          zIndex: 35,
+          cursor: 'grabbing'
+        }}
+        className={`group relative z-10 px-4 py-2.5 text-[14px] leading-snug tracking-normal shadow-sm cursor-default active:cursor-grabbing select-none transition-colors duration-200 ${
+          isUser
+            ? 'bg-[#007AFF] text-white rounded-[18px] font-medium'
+            : `${
+                isDark ? 'bg-[#2C2C2E] text-[#F2F2F7]' : 'bg-[#E5E5EA] text-[#1C1C1E]'
+              } rounded-[18px] font-normal`
+        }`}
+        style={{ wordBreak: 'break-word', touchAction: 'none' }}
+      >
+        {/* Authentic iOS iMessage Bubble Tail (Samuel Kraft Technique) */}
+        {isLastInGroup && (
+          <>
+            {/* Tail Base: Fills corner and extends 7px outwards */}
+            <div
+              className={`absolute bottom-0 w-[20px] h-[20px] pointer-events-none ${
+                isUser
+                  ? '-right-[7px] rounded-bl-[16px_14px]'
+                  : '-left-[7px] rounded-br-[16px_14px]'
+              }`}
+              style={{
+                backgroundColor: isUser
+                  ? '#007AFF'
+                  : isDark
+                  ? '#2C2C2E'
+                  : '#E5E5EA'
+              }}
+            />
+            {/* Tail Cutout: Shapes the natural iOS scoop using the chat background color */}
+            <div
+              className={`absolute bottom-0 w-[26px] h-[20px] pointer-events-none ${
+                isUser
+                  ? '-right-[26px] rounded-bl-[10px]'
+                  : '-left-[26px] rounded-br-[10px]'
+              }`}
+              style={{
+                backgroundColor: isDark ? '#121214' : '#F9F9FB'
+              }}
+            />
+          </>
+        )}
+
+        <span className="relative z-10">{message.content}</span>
+
+        {/* Pinned Corner Reaction Badge */}
+        <AnimatePresence>
+          {message.reaction && (
+            <motion.button
+              type="button"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              transition={{
+                type: 'spring',
+                stiffness: 420,
+                damping: 22,
+                mass: 0.5
+              }}
+              style={{
+                transformOrigin: isUser ? 'bottom right' : 'bottom left'
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isTapbackOpen) {
+                  onCloseTapback();
+                } else {
+                  onOpenTapback(message.id);
+                }
+              }}
+              className={`absolute -top-2.5 ${
+                isUser ? '-left-2' : '-right-2'
+              } z-20 flex items-center justify-center px-1.5 py-0.5 rounded-full text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.08)] border cursor-pointer select-none transition-transform active:scale-90 ${
+                isDark
+                  ? 'bg-[#2C2C2E] border-[#3A3A3C] text-white'
+                  : 'bg-white border-[#E5E5EA] text-[#1C1C1E]'
+              }`}
+            >
+              <span className="leading-none">{message.reaction}</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'alex',
-      content: "hey! i'm dávid's ai alter ego. ask me anything about web development, pricing, or the process.",
+      content: "hey! i'm dávid's ai alter ego. tap any prompt below to trigger screen effects, or ask me anything about UI design!",
       timeStr: formatMessageTime(),
       reaction: '🔥'
     }
@@ -302,7 +458,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
       triggerEffectOnce('confetti');
     } else if (lower.match(/\b(fire|lit|hot|cool|flame|sparks)\b/i) || text.includes('🔥')) {
       triggerEffectOnce('fire');
-    } else if (lower.match(/\b(love|heart|amazing|❤️|💖|💕)\b/i)) {
+    } else if (lower.match(/\b(love|heart|amazing)\b/i) || text.includes('❤️') || text.includes('💖') || text.includes('💕')) {
       triggerEffectOnce('hearts');
     }
   };
@@ -428,10 +584,17 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
         );
         triggerHaptic(25);
       }, 650);
-    } else if (lower.includes('deal') || text.includes('🎉')) {
+    } else if (lower.includes('deal') || lower.includes('celebrat') || lower.includes('party') || text.includes('🎉')) {
       setTimeout(() => {
         setMessages(prev =>
           prev.map(m => (m.id === userMsgId ? { ...m, reaction: '🔥' } : m))
+        );
+        triggerHaptic(25);
+      }, 650);
+    } else if (lower.includes('magic') || lower.includes('mind') || text.includes('✨') || text.includes('💡') || text.includes('🪄')) {
+      setTimeout(() => {
+        setMessages(prev =>
+          prev.map(m => (m.id === userMsgId ? { ...m, reaction: '💡' } : m))
         );
         triggerHaptic(25);
       }, 650);
@@ -473,33 +636,33 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
       // Simulating API loading latency
       await new Promise(r => setTimeout(r, 600));
 
-      responseText = "hey! i'm a simulated ai alter ego. ask me about pricing, process, or the tech stack. there might be an api hiccup, but the chat works fine.";
+      responseText = "hey! i'm a simulated ai alter ego. ask me about spring physics, dark mode, framer motion, or what makes ui feel native!";
       const lowercaseText = text.toLowerCase();
 
-      if (lowercaseText.includes('deal') || lowercaseText.includes('🎉')) {
-        responseText = "let's make it happen! feel free to book a consultation or send an email to hello@standout.hu. excited to collaborate!";
-      } else if (lowercaseText.includes('cool') || lowercaseText.includes('🔥')) {
-        responseText = "thank you so much! modern micro-interactions and spring physics make all the difference. try double-clicking or long-pressing any bubble to leave a tapback reaction!";
-      } else if (lowercaseText.includes('ai') || lowercaseText.includes('artificial') || lowercaseText.includes('why not') || lowercaseText.includes('mesterséges') || lowercaseText.includes('miért ne')) {
-        responseText = "if you just need a basic placeholder on a tight budget, ai site builders are a fine choice. but ai-generated sites all look identical, you blend into the noise, and price becomes the only differentiator. custom design builds credibility and converts.";
-      } else if (lowercaseText.includes('guarantee') || lowercaseText.includes('refund') || lowercaseText.includes('money') || lowercaseText.includes('garancia') || lowercaseText.includes('pénz') || lowercaseText.includes('visszafizet')) {
-        responseText = "there is no money-back guarantee, but during the project we iterate closely based on your feedback until you are 100% satisfied and proud of the final result.";
-      } else if (lowercaseText.includes('redesign') || lowercaseText.includes('revamp') || lowercaseText.includes('refresh') || lowercaseText.includes('újratervez')) {
-        responseText = "a redesign means completely revamping your existing website: modernized visuals, faster loading speeds, and high-conversion UX. redesign projects also receive a 25% discount off standard development fees.";
-      } else if (lowercaseText.includes('cost') || lowercaseText.includes('price') || lowercaseText.includes('pricing') || lowercaseText.includes('rate') || lowercaseText.includes('how much') || lowercaseText.includes('budget') || lowercaseText.includes('mennyi') || lowercaseText.includes('ár')) {
-        responseText = "custom web development from scratch starts at $1,200 (or €1,100) and takes 2-3 weeks. for redesign projects, you get a 25% discount off the development fee.";
-      } else if (lowercaseText.includes('how long') || lowercaseText.includes('time') || lowercaseText.includes('timeline') || lowercaseText.includes('turnaround') || lowercaseText.includes('when') || lowercaseText.includes('idő') || lowercaseText.includes('mikorra') || lowercaseText.includes('elkészül')) {
-        responseText = "most projects take 2 to 3 weeks from kickoff call to final launch, depending on scope, assets, and feedback speed.";
-      } else if (lowercaseText.includes('process') || lowercaseText.includes('step') || lowercaseText.includes('how does it work') || lowercaseText.includes('stage') || lowercaseText.includes('folyamat') || lowercaseText.includes('lépés')) {
-        responseText = "the typical process takes 2-3 weeks from intro call to launch: discovery call -> proposal -> 50% deposit -> wireframes & copy -> ui design -> development -> testing -> launch.";
-      } else if (lowercaseText.includes('stack') || lowercaseText.includes('tech') || lowercaseText.includes('tools') || lowercaseText.includes('react') || lowercaseText.includes('nextjs') || lowercaseText.includes('framer') || lowercaseText.includes('technológia')) {
-        responseText = "my go-to stack: react, next.js, tailwind css, and framer motion. every single website is custom-crafted and 100% template-free.";
-      } else if (lowercaseText.includes('referral') || lowercaseText.includes('affiliate') || lowercaseText.includes('commission') || lowercaseText.includes('recommend') || lowercaseText.includes('partner') || lowercaseText.includes('ajánl')) {
-        responseText = "if you refer a client and we launch a successful project, you earn a commission. for custom builds from scratch it's $250–$400, and for redesigns it's $100. drop me an email and we can set it up.";
-      } else if (lowercaseText.includes('maintenance') || lowercaseText.includes('maintain') || lowercaseText.includes('support') || lowercaseText.includes('retainer') || lowercaseText.includes('karbantart')) {
-        responseText = "maintenance is handled on a monthly retainer: security updates, automated backups, speed audits, and ongoing content edits are all included.";
-      } else if (lowercaseText.includes('hi') || lowercaseText.includes('hello') || lowercaseText.includes('hey') || lowercaseText.includes('szia') || lowercaseText.includes('üdv') || lowercaseText.includes('sup')) {
-        responseText = "hey! how can i help you today? feel free to ask about pricing, the process, or web development.";
+      if (lowercaseText.includes('celebrat') || lowercaseText.includes('party') || lowercaseText.includes('cheers') || lowercaseText.includes('deal') || lowercaseText.includes('🎉')) {
+        responseText = "boom! 🎉 confetti on screen, spring physics in the bubbles. who said web apps have to be boring?";
+      } else if (lowercaseText.includes('magic') || lowercaseText.includes('✨') || lowercaseText.includes('🪄')) {
+        responseText = "abracadabra! 🪄 swipe any bubble left to reveal exact timestamps, double-tap to tapback, or pull the list for spring tension. the web is pure magic when crafted right.";
+      } else if (lowercaseText.includes('love') || lowercaseText.includes('heart') || lowercaseText.includes('❤️')) {
+        responseText = "much love! ❤️ crafted with passion for detail, buttery 60fps spring physics, and organic tactile feedback.";
+      } else if (lowercaseText.includes('cool') || lowercaseText.includes('🔥') || lowercaseText.includes('clean') || lowercaseText.includes('awesome')) {
+        responseText = "thank you so much! micro-interactions and tactile feedback are my absolute obsession. try double-clicking or long-pressing any bubble to leave an ios tapback reaction!";
+      } else if (lowercaseText.includes('spring') || lowercaseText.includes('physics') || lowercaseText.includes('damping') || lowercaseText.includes('stiffness') || lowercaseText.includes('mass')) {
+        responseText = "unlike rigid bezier curves, springs have actual mass, stiffness, and damping! by cranking stiffness to ~450 and dialing damping to ~28, elements snap with organic, tactile momentum just like real physical objects.";
+      } else if (lowercaseText.includes('framer') || lowercaseText.includes('css') || lowercaseText.includes('transition')) {
+        responseText = "interruptibility! if a user taps or drags mid-flight, css animations jerk or reset. framer motion inherits real velocity, handles layoutId morphs, and calculates continuous physics without missing a beat.";
+      } else if (lowercaseText.includes('dark') || lowercaseText.includes('color') || lowercaseText.includes('palette') || lowercaseText.includes('theme') || lowercaseText.includes('black')) {
+        responseText = "rule #1: never use pure #000000! rule #2: layer deep tinted charcoals (like #121214) with translucent 1px borders and soft ambient glows. that's how you get that buttery, high-end oled depth.";
+      } else if (lowercaseText.includes('native') || lowercaseText.includes('haptic') || lowercaseText.includes('ios') || lowercaseText.includes('tactile') || lowercaseText.includes('gesture')) {
+        responseText = "it's all in the details! we pair gesture-tracked dragging with spring deceleration, 60fps canvas particle effects, and subtle tactile haptics. the web doesn't have to feel clunky—it can feel like native ios.";
+      } else if (lowercaseText.includes('ai') || lowercaseText.includes('artificial') || lowercaseText.includes('why not') || lowercaseText.includes('replace')) {
+        responseText = "ai builders are great for cookie-cutter landing pages, but they can't craft soul. bespoke design engineering blends subtle haptics, tailored spring curves, and intentional micro-delight that turns visitors into fans.";
+      } else if (lowercaseText.includes('stack') || lowercaseText.includes('tech') || lowercaseText.includes('tools') || lowercaseText.includes('react') || lowercaseText.includes('nextjs') || lowercaseText.includes('tailwind')) {
+        responseText = "the dream combo: react + next.js for speed, tailwind css for rapid styling, and framer motion + html5 canvas for buttery micro-interactions. zero templates, 100% handcrafted craftsmanship.";
+      } else if (lowercaseText.includes('animation') || lowercaseText.includes('motion') || lowercaseText.includes('animate') || lowercaseText.includes('build')) {
+        responseText = "great motion design is invisible yet felt. i build micro-interactions with framer motion and html5 canvas, focusing on gesture responsiveness and micro-delight rather than distracting flashiness.";
+      } else if (lowercaseText.includes('hi') || lowercaseText.includes('hello') || lowercaseText.includes('hey') || lowercaseText.includes('sup')) {
+        responseText = "hey! how can i help you with ui design today? ask me about spring physics, dark mode, framer motion, or what makes ui feel native.";
       }
     }
 
@@ -581,9 +744,10 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
       <div
         className={`w-full max-w-[576px] rounded-[24px] box-border flex flex-col h-[520px] md:h-[560px] overflow-hidden relative justify-between transition-colors duration-500 ${
           isDark
-            ? 'bg-[#1C1C1E] border border-[rgba(255,255,255,0.1)] shadow-[0_12px_40px_rgba(0,0,0,0.6)]'
-            : 'bg-white border border-[#E5E5EA] shadow-[0_4px_20px_0_rgba(0,0,0,0.05),0_1px_2px_0_rgba(0,0,0,0.03)]'
+            ? 'border border-[rgba(255,255,255,0.1)] shadow-[0_12px_40px_rgba(0,0,0,0.6)]'
+            : 'border border-[#E5E5EA] shadow-[0_4px_20px_0_rgba(0,0,0,0.05),0_1px_2px_0_rgba(0,0,0,0.03)]'
         }`}
+        style={{ backgroundColor: isDark ? '#121214' : '#F9F9FB' }}
       >
         {/* iOS Screen Effects Overlay */}
         <ScreenEffectsCanvas
@@ -592,14 +756,24 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
           isDark={isDark}
         />
 
-        {/* Header */}
+        {/* iOS 27 Progressive Long Blur Fade Header Background */}
         <div
-          className={`px-4 py-3 flex items-center justify-between shrink-0 relative z-20 border-b transition-colors duration-500 ${
-            isDark
-              ? 'bg-[#1C1C1E]/95 backdrop-blur-md border-[rgba(255,255,255,0.08)]'
-              : 'bg-white/90 backdrop-blur-md border-[#F2F2F7]'
-          }`}
-        >
+          className="absolute top-0 left-0 right-0 h-[108px] pointer-events-none z-20"
+          style={{
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            maskImage:
+              'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 32%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0.3) 78%, rgba(0, 0, 0, 0) 100%)',
+            WebkitMaskImage:
+              'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 32%, rgba(0, 0, 0, 0.75) 55%, rgba(0, 0, 0, 0.3) 78%, rgba(0, 0, 0, 0) 100%)',
+            background: isDark
+              ? 'linear-gradient(to bottom, rgba(18, 18, 20, 0.94) 0%, rgba(18, 18, 20, 0.86) 32%, rgba(18, 18, 20, 0.5) 58%, rgba(18, 18, 20, 0.18) 80%, transparent 100%)'
+              : 'linear-gradient(to bottom, rgba(249, 249, 251, 0.95) 0%, rgba(249, 249, 251, 0.88) 32%, rgba(249, 249, 251, 0.52) 58%, rgba(249, 249, 251, 0.18) 80%, transparent 100%)'
+          }}
+        />
+
+        {/* Floating Header Controls */}
+        <div className="absolute top-0 left-0 right-0 px-4 pt-3.5 pb-2 flex items-center justify-between z-30 pointer-events-none">
           {/* Left Shake Back Button */}
           <motion.button
             onClick={() => {
@@ -611,7 +785,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
             animate={isShaking ? { x: [-4, 4, -4, 4, 0] } : {}}
             transition={{ duration: 0.3 }}
             aria-label="Go back"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-transparent ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-transparent pointer-events-auto ${
               isDark
                 ? 'bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white'
                 : 'bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#1C1C1E]'
@@ -635,7 +809,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
 
           {/* Center Avatar & Name */}
           <motion.div
-            className="flex flex-col items-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 mt-0.5 cursor-pointer z-40"
+            className="flex flex-col items-center absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 mt-1 cursor-pointer z-40 pointer-events-auto"
             whileHover="hover"
             whileTap="tap"
             onClick={() => {
@@ -648,13 +822,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
                 hover: { rotateZ: 8, scale: 1.1 },
                 tap: { scale: 0.9, rotateY: 180 }
               }}
-              animate={{
-                boxShadow: isTyping
-                  ? ['0px 0px 0px 0px rgba(0, 122, 255, 0)', '0px 0px 12px 2px rgba(0, 122, 255, 0.4)', '0px 0px 0px 0px rgba(0, 122, 255, 0)']
-                  : '0px 0px 0px 0px rgba(0,0,0,0)'
-              }}
               transition={{
-                boxShadow: { duration: 2, repeat: Infinity, ease: 'easeInOut' },
                 rotateY: { type: 'spring', stiffness: 200, damping: 15 },
                 rotateZ: { type: 'spring', stiffness: 300, damping: 15 }
               }}
@@ -702,7 +870,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
           <a
             href="mailto:hello@standout.hu"
             aria-label="Send email"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-transparent relative z-40 ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-transparent relative z-40 pointer-events-auto ${
               isDark
                 ? 'bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white'
                 : 'bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#1C1C1E]'
@@ -741,7 +909,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
                 animate={{ opacity: 1, x: '-50%', y: 0, scale: 1 }}
                 exit={{ opacity: 0, x: '-50%', y: -10, scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                className={`absolute top-[60px] left-1/2 w-[220px] shadow-xl rounded-2xl p-1.5 z-40 flex flex-col gap-0.5 select-none backdrop-blur-xl border ${
+                className={`absolute top-[64px] left-1/2 w-[220px] shadow-xl rounded-2xl p-1.5 z-40 flex flex-col gap-0.5 select-none backdrop-blur-xl border ${
                   isDark
                     ? 'bg-[#2C2C2E]/95 border-[#3A3A3C] text-white'
                     : 'bg-white/95 border-[#E5E5EA] text-[#1C1C1E]'
@@ -755,25 +923,11 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
                   }`}
                 >
                   <Phone className="w-4 h-4 text-[#8E8E93]" />
-                  Consultation
+                  Call / Meeting
                 </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDropdownOpen(false);
-                    setMessages([messages[0]]);
-                    if (typeof window !== 'undefined') {
-                      sessionStorage.removeItem(SESSION_EFFECTS_KEY);
-                    }
-                  }}
-                  className="flex items-center gap-2.5 px-3 py-2 text-sm text-[#FF3B30] font-medium hover:bg-[#FFF0F0] dark:hover:bg-[#3A1E1E] rounded-xl transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 opacity-70" />
-                  Clear conversation
-                </button>
                 <div
-                  className={`h-[1px] mx-2 my-0.5 ${
-                    isDark ? 'bg-[#3A3A3C]' : 'bg-[#E5E5EA]'
+                  className={`h-[1px] my-0.5 ${
+                    isDark ? 'bg-[rgba(255,255,255,0.06)]' : 'bg-[#E5E5EA]'
                   }`}
                 />
                 <a
@@ -816,7 +970,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
         {/* Dismiss Tapback Backdrop */}
         {activeTapbackId && (
           <div
-            className="absolute inset-0 z-30"
+            className="absolute inset-0 z-35"
             onClick={() => setActiveTapbackId(null)}
           />
         )}
@@ -826,9 +980,8 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
           ref={containerRef}
           onPan={handlePan}
           onPanEnd={handlePanEnd}
-          className={`flex-1 overflow-y-auto px-5 py-4 scrollbar-hide min-h-0 flex flex-col transition-colors duration-500 relative touch-pan-y ${
-            isDark ? 'bg-[#121214]' : 'bg-[#F9F9FB]'
-          }`}
+          className="flex-1 overflow-y-auto px-5 pt-[78px] pb-4 scrollbar-hide min-h-0 flex flex-col transition-colors duration-500 relative touch-pan-y select-none"
+          style={{ backgroundColor: isDark ? '#121214' : '#F9F9FB' }}
           onClick={() => {
             if (activeTapbackId) setActiveTapbackId(null);
           }}
@@ -928,67 +1081,19 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
 
 
 
-                {/* Message Bubble Container */}
-                <div
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setActiveTapbackId(m.id);
-                    triggerHaptic(25);
-                  }}
-                  onDoubleClick={() => {
-                    setActiveTapbackId(m.id);
-                    triggerHaptic(25);
-                  }}
-                  onTouchStart={() => startLongPress(m.id)}
-                  onTouchEnd={cancelLongPress}
-                  onMouseDown={() => startLongPress(m.id)}
-                  onMouseUp={cancelLongPress}
-                  onMouseLeave={cancelLongPress}
-                  className={`group relative max-w-[80%] px-4 py-2.5 text-[14px] leading-snug tracking-normal shadow-sm select-text cursor-default transition-all duration-200 ${
-                    isUser
-                      ? `bg-[#007AFF] text-white rounded-2xl ${isLastInGroup ? 'rounded-br-[4px]' : ''} font-medium`
-                      : `${
-                          isDark ? 'bg-[#2C2C2E] text-[#F2F2F7]' : 'bg-[#E5E5EA] text-[#1C1C1E]'
-                        } rounded-2xl ${isLastInGroup ? 'rounded-bl-[4px]' : ''} font-normal`
-                  }`}
-                  style={{ wordBreak: 'break-word' }}
-                >
-                  {m.content}
-
-                  {/* Pinned Corner Reaction Badge */}
-                  <AnimatePresence>
-                    {m.reaction && (
-                      <motion.button
-                        type="button"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 420,
-                          damping: 22,
-                          mass: 0.5
-                        }}
-                        style={{
-                          transformOrigin: isUser ? 'bottom right' : 'bottom left'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveTapbackId(isTapbackOpen ? null : m.id);
-                        }}
-                        className={`absolute -top-2.5 ${
-                          isUser ? '-left-2' : '-right-2'
-                        } z-20 flex items-center justify-center px-1.5 py-0.5 rounded-full text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.08)] border cursor-pointer select-none transition-transform active:scale-90 ${
-                          isDark
-                            ? 'bg-[#2C2C2E] border-[#3A3A3C] text-white'
-                            : 'bg-white border-[#E5E5EA] text-[#1C1C1E]'
-                        }`}
-                      >
-                        <span className="leading-none">{m.reaction}</span>
-                      </motion.button>
-                    )}
-                  </AnimatePresence>
-                </div>
+                {/* Elastic Draggable Message Bubble */}
+                <ElasticMessageBubble
+                  message={m}
+                  isUser={isUser}
+                  isDark={isDark}
+                  isLastInGroup={isLastInGroup}
+                  isTapbackOpen={isTapbackOpen}
+                  onOpenTapback={(id) => setActiveTapbackId(id)}
+                  onCloseTapback={() => setActiveTapbackId(null)}
+                  onLongPressStart={(id) => startLongPress(id)}
+                  onLongPressCancel={cancelLongPress}
+                  triggerHaptic={triggerHaptic}
+                />
 
 
 
