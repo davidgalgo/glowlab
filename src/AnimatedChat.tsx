@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { Phone, Trash2, ExternalLink } from 'lucide-react';
+import { Phone, Trash2, ExternalLink, RotateCcw, ArrowUp } from 'lucide-react';
 
 const suggestions = [
+  "Play 8-Ball Pool! 🎱",
   "This UI looks so cool! 🔥",
   "Make this UI celebrate! 🎉",
   "Send some love! ❤️",
@@ -16,6 +17,7 @@ interface Message {
   created_at?: string;
   reaction?: string;
   timeStr?: string;
+  isGame?: boolean;
 }
 
 interface AnimatedChatProps {
@@ -96,16 +98,15 @@ function ScreenEffectsCanvas({
         wobbleSpeed: 0.05 + Math.random() * 0.05
       }));
     } else if (effect === 'fire') {
-      const colors = ['#FF3B30', '#FF9500', '#FFCC00', '#FF453A'];
-      particles = Array.from({ length: 55 }, () => ({
-        x: width * 0.15 + Math.random() * (width * 0.7),
-        y: height + Math.random() * 20,
-        radius: 3 + Math.random() * 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        vx: (Math.random() - 0.5) * 2,
-        vy: -2.5 - Math.random() * 3.5,
-        life: 1,
-        decay: 0.007 + Math.random() * 0.012
+      particles = Array.from({ length: 32 }, () => ({
+        x: width * 0.08 + Math.random() * (width * 0.84),
+        y: height + 10 + Math.random() * 90,
+        size: 20 + Math.random() * 24,
+        vy: -3.2 - Math.random() * 3.4,
+        vx: (Math.random() - 0.5) * 1.6,
+        wobble: Math.random() * Math.PI * 2,
+        wobbleSpeed: 0.05 + Math.random() * 0.05,
+        rotation: (Math.random() - 0.5) * 0.25
       }));
     } else if (effect === 'hearts') {
       particles = Array.from({ length: 22 }, () => ({
@@ -151,21 +152,19 @@ function ScreenEffectsCanvas({
         });
       } else if (effect === 'fire') {
         particles.forEach(p => {
-          p.x += p.vx + Math.sin(p.y * 0.05) * 0.5;
           p.y += p.vy;
-          p.life -= p.decay;
+          p.wobble += p.wobbleSpeed;
+          p.x += p.vx + Math.sin(p.wobble) * 1.5;
 
-          if (p.life > 0) {
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, p.life * fadeAlpha);
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = p.color;
-            ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, Math.max(0.5, p.radius * p.life), 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation + Math.sin(p.wobble) * 0.12);
+          ctx.font = `${p.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.globalAlpha = fadeAlpha;
+          ctx.fillText('🔥', 0, 0);
+          ctx.restore();
         });
       } else if (effect === 'hearts') {
         particles.forEach(p => {
@@ -203,6 +202,654 @@ function ScreenEffectsCanvas({
   );
 }
 
+interface PoolBall {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  color: string;
+  number: number;
+  isCue?: boolean;
+  sunk: boolean;
+  scale: number;
+}
+
+const TABLE_W = 284;
+const TABLE_H = 142;
+const BALL_R = 5.2;
+
+const MIN_X = 22.5;
+const MAX_X = 261.5;
+const MIN_Y = 22.5;
+const MAX_Y = 119.5;
+
+const POCKETS = [
+  { x: 20, y: 20, r: 10.5 },
+  { x: 264, y: 20, r: 10.5 },
+  { x: 20, y: 122, r: 10.5 },
+  { x: 264, y: 122, r: 10.5 },
+  { x: 142, y: 16.5, r: 8.5 },
+  { x: 142, y: 125.5, r: 8.5 },
+];
+
+const createInitialBalls = (): PoolBall[] => [
+  // White cue ball on baulk line
+  { id: 0, x: 72, y: 71, vx: 0, vy: 0, radius: BALL_R, color: '#FFFFFF', number: 0, isCue: true, sunk: false, scale: 1 },
+  // Rack Row 1 (apex)
+  { id: 1, x: 184, y: 71, vx: 0, vy: 0, radius: BALL_R, color: '#F59E0B', number: 1, sunk: false, scale: 1 },
+  // Rack Row 2
+  { id: 2, x: 193.5, y: 65.5, vx: 0, vy: 0, radius: BALL_R, color: '#2563EB', number: 2, sunk: false, scale: 1 },
+  { id: 3, x: 193.5, y: 76.5, vx: 0, vy: 0, radius: BALL_R, color: '#DC2626', number: 3, sunk: false, scale: 1 },
+  // Rack Row 3
+  { id: 4, x: 203, y: 60, vx: 0, vy: 0, radius: BALL_R, color: '#9333EA', number: 4, sunk: false, scale: 1 },
+  { id: 8, x: 203, y: 71, vx: 0, vy: 0, radius: BALL_R, color: '#18181B', number: 8, sunk: false, scale: 1 }, // 8-Ball in center
+  { id: 6, x: 203, y: 82, vx: 0, vy: 0, radius: BALL_R, color: '#EA580C', number: 6, sunk: false, scale: 1 },
+];
+
+interface GamePigeon8BallProps {
+  isDark: boolean;
+  triggerHaptic: (ms: number) => void;
+  onAlexReaction?: (reaction: string) => void;
+}
+
+function GamePigeon8Ball({ isDark, triggerHaptic, onAlexReaction }: GamePigeon8BallProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ballsRef = useRef<PoolBall[]>(createInitialBalls());
+  const [turn, setTurn] = useState<'player' | 'rolling' | 'alex' | 'game_over'>('player');
+  const [statusMsg, setStatusMsg] = useState<string>("Pull back from cue ball to shoot");
+  const [winner, setWinner] = useState<'player' | 'alex' | null>(null);
+  const [pocketed, setPocketed] = useState<number[]>([]);
+
+  const lastShooterRef = useRef<'player' | 'alex' | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const dragCurrentRef = useRef<{ x: number; y: number } | null>(null);
+  const alexAimRef = useRef<{ active: boolean; aimAngle: number; pullDist: number } | null>(null);
+  const animFrameIdRef = useRef<number | null>(null);
+  const turnRef = useRef(turn);
+  turnRef.current = turn;
+
+  const resetGame = () => {
+    ballsRef.current = createInitialBalls();
+    setTurn('player');
+    setWinner(null);
+    setPocketed([]);
+    setStatusMsg("Fresh rack • Pull back cue ball to break!");
+    lastShooterRef.current = null;
+    isDraggingRef.current = false;
+    dragCurrentRef.current = null;
+    alexAimRef.current = null;
+    triggerHaptic(30);
+  };
+
+  // Main 60fps game loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Retina DPR setup
+    const dpr = window.devicePixelRatio || 2;
+    canvas.width = TABLE_W * dpr;
+    canvas.height = TABLE_H * dpr;
+
+    let isRunning = true;
+
+    const loop = () => {
+      if (!isRunning) return;
+
+      const balls = ballsRef.current;
+      const currentTurn = turnRef.current;
+
+      // 1. Physics update when balls are rolling
+      if (currentTurn === 'rolling') {
+        let anyMoving = false;
+
+        for (const b of balls) {
+          if (b.sunk) {
+            if (b.scale > 0) {
+              b.scale = Math.max(0, b.scale - 0.08);
+            }
+            continue;
+          }
+
+          b.x += b.vx;
+          b.y += b.vy;
+
+          // Felt friction
+          b.vx *= 0.984;
+          b.vy *= 0.984;
+
+          if (Math.hypot(b.vx, b.vy) < 0.04) {
+            b.vx = 0;
+            b.vy = 0;
+          } else {
+            anyMoving = true;
+          }
+
+          // Rail cushion bounces
+          if (b.x - b.radius < MIN_X) {
+            b.x = MIN_X + b.radius;
+            b.vx = -b.vx * 0.84;
+          } else if (b.x + b.radius > MAX_X) {
+            b.x = MAX_X - b.radius;
+            b.vx = -b.vx * 0.84;
+          }
+
+          if (b.y - b.radius < MIN_Y) {
+            b.y = MIN_Y + b.radius;
+            b.vy = -b.vy * 0.84;
+          } else if (b.y + b.radius > MAX_Y) {
+            b.y = MAX_Y - b.radius;
+            b.vy = -b.vy * 0.84;
+          }
+
+          // Pocket capture
+          for (const p of POCKETS) {
+            const dist = Math.hypot(b.x - p.x, b.y - p.y);
+            if (dist < p.r + 1.8) {
+              b.sunk = true;
+              triggerHaptic(22);
+              break;
+            }
+          }
+        }
+
+        // Ball-to-ball elastic collisions
+        for (let i = 0; i < balls.length; i++) {
+          for (let j = i + 1; j < balls.length; j++) {
+            const b1 = balls[i];
+            const b2 = balls[j];
+            if (b1.sunk || b2.sunk) continue;
+
+            const dx = b2.x - b1.x;
+            const dy = b2.y - b1.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = b1.radius + b2.radius;
+
+            if (dist < minDist && dist > 0.001) {
+              const nx = dx / dist;
+              const ny = dy / dist;
+              const overlap = (minDist - dist) / 2;
+
+              b1.x -= nx * overlap;
+              b1.y -= ny * overlap;
+              b2.x += nx * overlap;
+              b2.y += ny * overlap;
+
+              const kx = b1.vx - b2.vx;
+              const ky = b1.vy - b2.vy;
+              const p = nx * kx + ny * ky;
+
+              if (p > 0) {
+                const impulse = p * 0.95;
+                b1.vx -= impulse * nx;
+                b1.vy -= impulse * ny;
+                b2.vx += impulse * nx;
+                b2.vy += impulse * ny;
+                if (impulse > 0.35) triggerHaptic(8);
+              }
+            }
+          }
+        }
+
+        // Check if all balls stopped rolling
+        if (!anyMoving) {
+          const sunkBalls = balls.filter(b => !b.isCue && b.sunk).map(b => b.number);
+          setPocketed(sunkBalls);
+
+          const cue = balls.find(b => b.isCue)!;
+          const eightBall = balls.find(b => b.number === 8)!;
+
+          // Check scratch
+          let scratched = false;
+          if (cue.sunk) {
+            scratched = true;
+            cue.sunk = false;
+            cue.scale = 1;
+            cue.x = 72;
+            cue.y = 71;
+            cue.vx = 0;
+            cue.vy = 0;
+            triggerHaptic(30);
+          }
+
+          // Check 8-ball sink
+          if (eightBall.sunk) {
+            const whoWon = lastShooterRef.current === 'player' ? 'player' : 'alex';
+            setWinner(whoWon);
+            setTurn('game_over');
+            setStatusMsg(whoWon === 'player' ? '🏆 8-Ball Pocketed! YOU WON!' : '🎱 Alex sunk the 8-Ball and Won!');
+            onAlexReaction?.(whoWon === 'player' ? '👏' : '🔥');
+          } else {
+            // Turn transition
+            if (lastShooterRef.current === 'player') {
+              setTurn('alex');
+              setStatusMsg(scratched ? "Scratch! Alex's turn to shoot" : "Alex's turn • Lining up shot...");
+            } else {
+              setTurn('player');
+              setStatusMsg(scratched ? "Alex scratched! Your turn" : "Your turn • Drag cue ball backward");
+            }
+          }
+        }
+      }
+
+      // 2. Render Canvas
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, TABLE_W, TABLE_H);
+
+      // Outer wood rail frame
+      ctx.fillStyle = isDark ? '#141210' : '#2A1F18';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, TABLE_W, TABLE_H, 14);
+      ctx.fill();
+
+      // Inner cushion bevel
+      ctx.fillStyle = isDark ? '#1F1B16' : '#3D2D24';
+      ctx.beginPath();
+      ctx.roundRect(5, 5, TABLE_W - 10, TABLE_H - 10, 10);
+      ctx.fill();
+
+      // Diamond sights (rail markers)
+      ctx.fillStyle = '#F8FAFC';
+      const sightsTopBottom = [72, 142, 212];
+      sightsTopBottom.forEach(sx => {
+        ctx.beginPath(); ctx.arc(sx, 3, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, TABLE_H - 3, 1.2, 0, Math.PI * 2); ctx.fill();
+      });
+      const sightsSides = [48, 94];
+      sightsSides.forEach(sy => {
+        ctx.beginPath(); ctx.arc(3, sy, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(TABLE_W - 3, sy, 1.2, 0, Math.PI * 2); ctx.fill();
+      });
+
+      // Table felt area (clipped)
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(16, 16, TABLE_W - 32, TABLE_H - 32, 6);
+      ctx.clip();
+
+      const feltGrad = ctx.createRadialGradient(142, 71, 10, 142, 71, 130);
+      if (isDark) {
+        feltGrad.addColorStop(0, '#0E543D');
+        feltGrad.addColorStop(1, '#072E20');
+      } else {
+        feltGrad.addColorStop(0, '#138A51');
+        feltGrad.addColorStop(1, '#095733');
+      }
+      ctx.fillStyle = feltGrad;
+      ctx.fillRect(16, 16, TABLE_W - 32, TABLE_H - 32);
+
+      // Baulk line (head string) & spot
+      ctx.setLineDash([2, 3]);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(72, 16);
+      ctx.lineTo(72, TABLE_H - 16);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.beginPath();
+      ctx.arc(72, 71, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pockets: Brass rim + deep shadow cavity
+      POCKETS.forEach(p => {
+        ctx.fillStyle = '#C2932E';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 1.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#050706';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      const cue = balls.find(b => b.isCue)!;
+
+      // 3. Aiming guides & Cue stick
+      let activeAimAngle: number | null = null;
+      let activePullDist = 0;
+
+      if (currentTurn === 'player' && isDraggingRef.current && dragCurrentRef.current && !cue.sunk) {
+        const pullDx = cue.x - dragCurrentRef.current.x;
+        const pullDy = cue.y - dragCurrentRef.current.y;
+        activePullDist = Math.min(Math.hypot(pullDx, pullDy), 55);
+        activeAimAngle = Math.atan2(pullDy, pullDx);
+      } else if (currentTurn === 'alex' && alexAimRef.current && !cue.sunk) {
+        activeAimAngle = alexAimRef.current.aimAngle;
+        activePullDist = alexAimRef.current.pullDist;
+      }
+
+      if (activeAimAngle !== null && !cue.sunk) {
+        // Laser trajectory line
+        const guideLen = Math.min(100, 32 + activePullDist * 2.2);
+        const endX = cue.x + Math.cos(activeAimAngle) * guideLen;
+        const endY = cue.y + Math.sin(activeAimAngle) * guideLen;
+
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cue.x, cue.y);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Ghost target circle
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(endX, endY, BALL_R, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Realistic Cue Stick
+        const stickAngle = activeAimAngle + Math.PI;
+        const tipGap = BALL_R + 3 + activePullDist;
+        const tipX = cue.x + Math.cos(stickAngle) * tipGap;
+        const tipY = cue.y + Math.sin(stickAngle) * tipGap;
+        const ferruleX = cue.x + Math.cos(stickAngle) * (tipGap + 3);
+        const ferruleY = cue.y + Math.sin(stickAngle) * (tipGap + 3);
+        const shaftEndX = cue.x + Math.cos(stickAngle) * (tipGap + 48);
+        const shaftEndY = cue.y + Math.sin(stickAngle) * (tipGap + 48);
+        const buttX = cue.x + Math.cos(stickAngle) * (tipGap + 86);
+        const buttY = cue.y + Math.sin(stickAngle) * (tipGap + 86);
+
+        // Chalk blue tip
+        ctx.strokeStyle = '#38BDF8';
+        ctx.lineWidth = 2.8;
+        ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(ferruleX, ferruleY); ctx.stroke();
+
+        // White ferrule
+        const ferruleEndX = cue.x + Math.cos(stickAngle) * (tipGap + 7);
+        const ferruleEndY = cue.y + Math.sin(stickAngle) * (tipGap + 7);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3.0;
+        ctx.beginPath(); ctx.moveTo(ferruleX, ferruleY); ctx.lineTo(ferruleEndX, ferruleEndY); ctx.stroke();
+
+        // Maple shaft
+        ctx.strokeStyle = '#E0A96D';
+        ctx.lineWidth = 3.6;
+        ctx.beginPath(); ctx.moveTo(ferruleEndX, ferruleEndY); ctx.lineTo(shaftEndX, shaftEndY); ctx.stroke();
+
+        // Irish linen wrap & handle
+        ctx.strokeStyle = '#1E293B';
+        ctx.lineWidth = 4.8;
+        ctx.beginPath(); ctx.moveTo(shaftEndX, shaftEndY); ctx.lineTo(buttX, buttY); ctx.stroke();
+      }
+
+      // 4. Balls Rendering
+      balls.forEach(b => {
+        if (b.sunk && b.scale <= 0) return;
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(b.x + 0.6, b.y + 1.2, BALL_R * b.scale, (BALL_R * 0.6) * b.scale, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ball 3D Sphere shading
+        const ballGrad = ctx.createRadialGradient(
+          b.x - 1.4 * b.scale,
+          b.y - 1.4 * b.scale,
+          0.3,
+          b.x,
+          b.y,
+          BALL_R * b.scale
+        );
+
+        if (b.isCue) {
+          ballGrad.addColorStop(0, '#FFFFFF');
+          ballGrad.addColorStop(0.7, '#F1F5F9');
+          ballGrad.addColorStop(1, '#94A3B8');
+        } else {
+          ballGrad.addColorStop(0, '#FFFFFF');
+          ballGrad.addColorStop(0.2, b.color);
+          ballGrad.addColorStop(1, '#050505');
+        }
+
+        ctx.fillStyle = ballGrad;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BALL_R * b.scale, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Number Badge
+        if (b.number > 0 && b.scale > 0.6) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, 2.2 * b.scale, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#000000';
+          ctx.font = `bold ${Math.round(3.4 * b.scale)}px -apple-system, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(b.number), b.x, b.y + 0.3);
+        } else if (b.isCue && b.scale > 0.6) {
+          ctx.fillStyle = '#EF4444';
+          ctx.beginPath();
+          ctx.arc(b.x + 0.8, b.y - 0.6, 0.7 * b.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      ctx.restore(); // end clip
+      ctx.restore(); // end dpr scale
+
+      animFrameIdRef.current = requestAnimationFrame(loop);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      isRunning = false;
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+    };
+  }, [isDark]);
+
+  // Handle Alex's AI counter-turn
+  useEffect(() => {
+    if (turn !== 'alex') return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    timeoutId = setTimeout(() => {
+      const balls = ballsRef.current;
+      const cue = balls.find(b => b.isCue);
+      if (!cue || cue.sunk) return;
+
+      const unsunk = balls.filter(b => !b.isCue && !b.sunk);
+      if (unsunk.length === 0) return;
+
+      const nonEight = unsunk.filter(b => b.number !== 8);
+      const target = (nonEight.length > 0
+        ? nonEight[Math.floor(Math.random() * nonEight.length)]
+        : unsunk[0])!;
+
+      let bestPocket = POCKETS[0];
+      let minDist = Infinity;
+      for (const p of POCKETS) {
+        const d = Math.hypot(p.x - target.x, p.y - target.y);
+        if (d < minDist) {
+          minDist = d;
+          bestPocket = p;
+        }
+      }
+
+      const angleToPocket = Math.atan2(bestPocket.y - target.y, bestPocket.x - target.x);
+      const ghostX = target.x - Math.cos(angleToPocket) * (BALL_R * 2);
+      const ghostY = target.y - Math.sin(angleToPocket) * (BALL_R * 2);
+
+      const shotAngle = Math.atan2(ghostY - cue.y, ghostX - cue.x) + (Math.random() - 0.5) * 0.08;
+
+      const startTime = performance.now();
+      const aimDuration = 700;
+
+      const animateAim = (time: number) => {
+        const elapsed = time - startTime;
+        const progress = Math.min(1, elapsed / aimDuration);
+        const pull = Math.sin(progress * Math.PI) * 25;
+
+        alexAimRef.current = {
+          active: true,
+          aimAngle: shotAngle,
+          pullDist: pull
+        };
+
+        if (progress < 1) {
+          requestAnimationFrame(animateAim);
+        } else {
+          alexAimRef.current = null;
+          const speed = 4.8 + Math.random() * 2.5;
+          cue.vx = Math.cos(shotAngle) * speed;
+          cue.vy = Math.sin(shotAngle) * speed;
+          lastShooterRef.current = 'alex';
+          setTurn('rolling');
+          setStatusMsg("Alex shoots! Balls rolling...");
+          triggerHaptic(20);
+        }
+      };
+
+      requestAnimationFrame(animateAim);
+    }, 700);
+
+    return () => clearTimeout(timeoutId);
+  }, [turn]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
+    if (turn !== 'player') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (TABLE_W / rect.width);
+    const py = (e.clientY - rect.top) * (TABLE_H / rect.height);
+
+    isDraggingRef.current = true;
+    dragCurrentRef.current = { x: px, y: py };
+    triggerHaptic(10);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
+    if (!isDraggingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (TABLE_W / rect.width);
+    const py = (e.clientY - rect.top) * (TABLE_H / rect.height);
+    dragCurrentRef.current = { x: px, y: py };
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
+    const cue = ballsRef.current.find(b => b.isCue);
+    if (!cue || cue.sunk || !dragCurrentRef.current) {
+      dragCurrentRef.current = null;
+      return;
+    }
+
+    const pullDx = cue.x - dragCurrentRef.current.x;
+    const pullDy = cue.y - dragCurrentRef.current.y;
+    const pullDist = Math.hypot(pullDx, pullDy);
+    dragCurrentRef.current = null;
+
+    if (pullDist > 6) {
+      const aimAngle = Math.atan2(pullDy, pullDx);
+      const speed = Math.min(pullDist * 0.16, 8.5);
+      cue.vx = Math.cos(aimAngle) * speed;
+      cue.vy = Math.sin(aimAngle) * speed;
+      lastShooterRef.current = 'player';
+      setTurn('rolling');
+      setStatusMsg("Shot released! Balls rolling...");
+      triggerHaptic(25);
+    }
+  };
+
+  return (
+    <div
+      className="game-card-container flex flex-col w-full select-none"
+      onPointerDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
+    >
+      {/* Game Header Bar */}
+      <div className="flex items-center justify-between px-1 pb-2">
+        <div className="flex items-center gap-1.5">
+          <div className="w-4 h-4 rounded-full bg-black border border-white/20 flex items-center justify-center shadow-xs">
+            <span className="text-[7px] font-black text-white leading-none">8</span>
+          </div>
+          <span className="text-[11px] font-bold tracking-tight uppercase opacity-90">
+            8-Ball Pool
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={resetGame}
+          title="Rack new game"
+          className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+            isDark
+              ? 'bg-white/10 hover:bg-white/20 text-white/80'
+              : 'bg-black/5 hover:bg-black/10 text-black/70'
+          }`}
+        >
+          <RotateCcw className="w-2.5 h-2.5" />
+        </button>
+      </div>
+
+      {/* Pool Table Canvas */}
+      <div className="relative rounded-[12px] overflow-hidden shadow-inner cursor-crosshair">
+        <canvas
+          ref={canvasRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="w-full h-auto block select-none"
+          style={{ touchAction: 'none' }}
+        />
+      </div>
+
+      {/* Footer Info & Sunk Tray */}
+      <div className="flex items-center justify-between px-1 pt-2 text-[10px] leading-tight">
+        <span className="opacity-75 font-medium truncate max-w-[190px]">
+          {statusMsg}
+        </span>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {pocketed.length > 0 ? (
+            pocketed.map(num => (
+              <div
+                key={num}
+                className="w-3 h-3 rounded-full bg-black/60 border border-white/20 flex items-center justify-center shadow-2xs"
+                title={`Ball ${num} pocketed`}
+              >
+                <span className="text-[6px] font-bold text-white leading-none">{num}</span>
+              </div>
+            ))
+          ) : (
+            <span className="text-[9px] opacity-40 font-semibold">6 balls racked</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ElasticMessageBubbleProps {
   message: Message;
   isUser: boolean;
@@ -214,6 +861,7 @@ interface ElasticMessageBubbleProps {
   onLongPressStart: (id: string) => void;
   onLongPressCancel: () => void;
   triggerHaptic: (ms: number) => void;
+  onAlexReaction?: (reaction: string) => void;
 }
 
 function ElasticMessageBubble({
@@ -226,10 +874,122 @@ function ElasticMessageBubble({
   onCloseTapback,
   onLongPressStart,
   onLongPressCancel,
-  triggerHaptic
+  triggerHaptic,
+  onAlexReaction
 }: ElasticMessageBubbleProps) {
   const hasDraggedRef = useRef(false);
   const bubbleColor = isUser ? '#007AFF' : isDark ? '#2C2C2E' : '#E5E5EA';
+
+  if (message.isGame) {
+    return (
+      <div
+        className="game-card-container relative select-none my-1"
+        onPointerDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+      >
+        <motion.div
+          drag={false}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onOpenTapback(message.id);
+            triggerHaptic(25);
+          }}
+          onDoubleClick={() => {
+            onOpenTapback(message.id);
+            triggerHaptic(25);
+          }}
+          onTouchStart={() => onLongPressStart(message.id)}
+          onTouchEnd={onLongPressCancel}
+          onMouseDown={() => onLongPressStart(message.id)}
+          onMouseUp={onLongPressCancel}
+          onMouseLeave={onLongPressCancel}
+          className={`group relative z-10 p-2.5 rounded-[22px] shadow-md transition-colors duration-200 ${
+            isUser
+              ? 'bg-[#007AFF] text-white'
+              : isDark
+              ? 'bg-[#1C1C1E] text-[#F2F2F7] border border-[rgba(255,255,255,0.08)]'
+              : 'bg-[#E5E5EA] text-[#1C1C1E] border border-[#D1D1D6]'
+          }`}
+          style={{ width: '304px', maxWidth: '100%', touchAction: 'none' }}
+        >
+          <GamePigeon8Ball
+            isDark={isDark}
+            triggerHaptic={triggerHaptic}
+            onAlexReaction={onAlexReaction}
+          />
+
+          {/* Authentic iOS iMessage Bubble Tail */}
+          {isLastInGroup && (
+            <>
+              <div
+                className={`absolute bottom-0 w-[20px] h-[20px] pointer-events-none ${
+                  isUser
+                    ? '-right-[7px] rounded-bl-[16px_14px]'
+                    : '-left-[7px] rounded-br-[16px_14px]'
+                }`}
+                style={{
+                  backgroundColor: isUser
+                    ? '#007AFF'
+                    : isDark
+                    ? '#1C1C1E'
+                    : '#E5E5EA'
+                }}
+              />
+              <div
+                className={`absolute bottom-0 w-[26px] h-[20px] pointer-events-none transition-colors duration-500 ${
+                  isUser
+                    ? '-right-[26px] rounded-bl-[10px]'
+                    : '-left-[26px] rounded-br-[10px]'
+                } ${isDark ? 'bg-[#121214]' : 'bg-[#F9F9FB]'}`}
+                style={{
+                  backgroundColor: isDark ? '#121214' : '#F9F9FB'
+                }}
+              />
+            </>
+          )}
+
+          {/* Pinned Corner Reaction Badge */}
+          <AnimatePresence>
+            {message.reaction && (
+              <motion.button
+                type="button"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 420,
+                  damping: 22,
+                  mass: 0.5
+                }}
+                style={{
+                  transformOrigin: isUser ? 'bottom right' : 'bottom left'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isTapbackOpen) {
+                    onCloseTapback();
+                  } else {
+                    onOpenTapback(message.id);
+                  }
+                }}
+                className={`absolute -top-2.5 ${
+                  isUser ? '-left-2' : '-right-2'
+                } z-20 flex items-center justify-center px-1.5 py-0.5 rounded-full text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.08)] border cursor-pointer select-none transition-transform active:scale-90 ${
+                  isDark
+                    ? 'bg-[#2C2C2E] border-[#3A3A3C] text-white'
+                    : 'bg-white border-[#E5E5EA] text-[#1C1C1E]'
+                }`}
+              >
+                <span className="leading-none">{message.reaction}</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative max-w-[80%] select-none">
@@ -307,11 +1067,11 @@ function ElasticMessageBubble({
             />
             {/* Tail Cutout: Shapes the natural iOS scoop using the chat background color */}
             <div
-              className={`absolute bottom-0 w-[26px] h-[20px] pointer-events-none ${
+              className={`absolute bottom-0 w-[26px] h-[20px] pointer-events-none transition-colors duration-500 ${
                 isUser
                   ? '-right-[26px] rounded-bl-[10px]'
                   : '-left-[26px] rounded-br-[10px]'
-              }`}
+              } ${isDark ? 'bg-[#121214]' : 'bg-[#F9F9FB]'}`}
               style={{
                 backgroundColor: isDark ? '#121214' : '#F9F9FB'
               }}
@@ -363,6 +1123,435 @@ function ElasticMessageBubble({
   );
 }
 
+
+function MagneticWrapper({
+  children,
+  radius = 40,
+  pullForce = 0.25,
+  hoverScale = 1.08,
+  pressScale = 0.94,
+  stretchMax = 0.03
+}: {
+  children: React.ReactElement<any>;
+  radius?: number;
+  pullForce?: number;
+  hoverScale?: number;
+  pressScale?: number;
+  stretchMax?: number;
+}) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const stiffness = 0.12;
+    const damping = 0.25;
+
+    const state = { sx: 1, sy: 1, tx: 0, ty: 0, vsx: 0, vsy: 0, vtx: 0, vty: 0 };
+    const target = { sx: 1, sy: 1, tx: 0, ty: 0 };
+
+    let rect: DOMRect, center: { x: number; y: number }, down = false, isHovered = false;
+    let animationFrameId: number;
+
+    const measure = () => {
+      rect = el.getBoundingClientRect();
+      center = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+    };
+    measure();
+
+    const reset = () => {
+      isHovered = false;
+      target.tx = 0;
+      target.ty = 0;
+      target.sx = 1;
+      target.sy = 1;
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) {
+        reset();
+        return;
+      }
+
+      const dx = e.clientX - center.x;
+      const dy = e.clientY - center.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance < radius) {
+        isHovered = true;
+        const nx = dx / (rect.width / 2);
+        const ny = dy / (rect.height / 2);
+
+        target.tx = dx * pullForce;
+        target.ty = dy * pullForce;
+
+        const currentBaseScale = down ? pressScale : hoverScale;
+        target.sx = currentBaseScale + Math.abs(nx) * stretchMax;
+        target.sy = currentBaseScale + Math.abs(ny) * stretchMax;
+      } else {
+        reset();
+      }
+    };
+
+    const handlePointerDown = () => {
+      down = true;
+      if (isHovered) {
+        target.sx = pressScale;
+        target.sy = pressScale;
+      }
+    };
+
+    const handlePointerUp = () => {
+      down = false;
+      if (isHovered) {
+        target.sx = hoverScale;
+        target.sy = hoverScale;
+      } else {
+        reset();
+      }
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerleave', reset);
+    document.addEventListener('mouseleave', reset);
+    window.addEventListener('scroll', measure, { passive: true });
+    el.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('blur', handlePointerUp);
+
+    const loop = () => {
+      let fsx = (target.sx - state.sx) * stiffness;
+      state.vsx = (state.vsx + fsx) * (1 - damping);
+      state.sx += state.vsx;
+
+      let fsy = (target.sy - state.sy) * stiffness;
+      state.vsy = (state.vsy + fsy) * (1 - damping);
+      state.sy += state.vsy;
+
+      let ftx = (target.tx - state.tx) * stiffness;
+      state.vtx = (state.vtx + ftx) * (1 - damping);
+      state.tx += state.vtx;
+
+      let fty = (target.ty - state.ty) * stiffness;
+      state.vty = (state.vty + fty) * (1 - damping);
+      state.ty += state.vty;
+
+      el.style.transform = `translate(${state.tx.toFixed(3)}px, ${state.ty.toFixed(3)}px) scale(${state.sx.toFixed(4)}, ${state.sy.toFixed(4)})`;
+
+      animationFrameId = requestAnimationFrame(loop);
+    };
+    loop();
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerleave', reset);
+      document.removeEventListener('mouseleave', reset);
+      window.removeEventListener('scroll', measure);
+      el.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('blur', handlePointerUp);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [radius, pullForce, hoverScale, pressScale, stretchMax]);
+
+  return React.cloneElement(children, {
+    ref,
+    style: { ...children.props.style, willChange: 'transform' }
+  });
+}
+
+interface ChatAnimatedTypingInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  onSend: (text: string) => void;
+  isDark: boolean;
+  disabled?: boolean;
+  triggerHaptic: (ms: number) => void;
+}
+
+function ChatAnimatedTypingInput({
+  value,
+  onChange,
+  onSend,
+  isDark,
+  disabled = false,
+  triggerHaptic
+}: ChatAnimatedTypingInputProps) {
+  const [pulses, setPulses] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [cursorIndex, setCursorIndex] = useState(0);
+  const [triggerState, setTriggerState] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const [caretPos, setCaretPos] = useState({ x: 0, y: 0, h: 20 });
+  const [isTypingState, setIsTypingState] = useState(false);
+  const [isBouncing, setIsBouncing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const caretRef = useRef<HTMLSpanElement>(null);
+  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync cursor and clean pulses when value resets
+  useEffect(() => {
+    if (!value) {
+      setCursorIndex(0);
+      setPulses([]);
+      if (textAreaRef.current) {
+        textAreaRef.current.style.height = 'auto';
+      }
+    }
+  }, [value]);
+
+  const updateCaret = useCallback(() => {
+    if (caretRef.current) {
+      setCaretPos({
+        x: caretRef.current.offsetLeft,
+        y: caretRef.current.offsetTop,
+        h: caretRef.current.offsetHeight || 20,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    requestAnimationFrame(updateCaret);
+  }, [cursorIndex, value, updateCaret]);
+
+  // Pulse effect spawn exactly like AnimatedTypingInput.tsx
+  useEffect(() => {
+    if (triggerState && caretRef.current) {
+      const x = caretRef.current.offsetLeft;
+      const y = caretRef.current.offsetTop;
+      const newPulse = { id: triggerState + Math.random(), x, y };
+
+      setPulses((prev) => [...prev, newPulse]);
+
+      setTimeout(() => {
+        setPulses((prev) => prev.filter((p) => p.id !== newPulse.id));
+      }, 750);
+    }
+  }, [triggerState]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    onChange(val);
+    setCursorIndex(e.target.selectionStart || 0);
+    setTriggerState(Date.now());
+
+    // Auto-adjust height dynamically up to 88px
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(88, Math.max(22, el.scrollHeight))}px`;
+
+    // Tactile spring bounce
+    setIsBouncing(true);
+    if (bounceTimeoutRef.current) clearTimeout(bounceTimeoutRef.current);
+    bounceTimeoutRef.current = setTimeout(() => setIsBouncing(false), 50);
+
+    // Glowing border state
+    setIsTypingState(true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => setIsTypingState(false), 500);
+  };
+
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    setCursorIndex(e.currentTarget.selectionStart || 0);
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (value.trim() && !disabled) {
+        onSend(value);
+        setPulses([]);
+        triggerHaptic(30);
+      }
+    }
+  };
+
+  const handleSendClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (value.trim() && !disabled) {
+      onSend(value);
+      setPulses([]);
+      triggerHaptic(30);
+    }
+  };
+
+  const textStyles: React.CSSProperties = {
+    fontFamily: '"Inter", system-ui, sans-serif',
+    fontSize: '14px',
+    lineHeight: '20px',
+    whiteSpace: 'pre-wrap',
+    wordWrap: 'break-word',
+    overflowWrap: 'break-word',
+    margin: 0,
+  };
+
+  const paddingClass = "px-4 py-[10px]";
+
+  return (
+    <div className="flex-1 flex items-end gap-2 w-full">
+      {/* Interactive Chat Pill */}
+      <motion.div
+        animate={{ scale: isBouncing ? 0.985 : 1 }}
+        transition={{ scale: { type: "spring", stiffness: 450, damping: 25 } }}
+        className="group relative flex-1 min-h-[42px] max-h-[92px] flex items-center rounded-[22px] transition-all duration-300"
+      >
+        {/* Layer 0: Clean Background & Border (No Glow) */}
+        <div
+          className={`absolute inset-0 rounded-[22px] overflow-hidden pointer-events-none z-0 transition-colors duration-300 border ${
+            isDark ? 'bg-[#2C2C2E] border-[#3A3A3C]' : 'bg-[#F2F2F7] border-[#E5E5EA]'
+          }`}
+        >
+          {/* Visual text layers mirroring Textarea scroll */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ transform: `translateY(-${scrollTop}px)` }}
+          >
+            {/* Layer 1: Base Readable Text */}
+            <div
+              className={`absolute top-0 left-0 w-full min-h-full ${paddingClass} transition-colors duration-300 select-none`}
+              style={{
+                ...textStyles,
+                color: isDark ? '#F2F2F7' : '#1C1C1E',
+              }}
+            >
+              {value || <span className="text-[#8E8E93] opacity-60">Ask anything...</span>}
+            </div>
+
+            {/* Layer 2: Expanding Pulses Masked to Text */}
+            <AnimatePresence>
+              {pulses.map((pulse) => (
+                <motion.div
+                  key={pulse.id}
+                  initial={{ "--pulse-radius": "5px", opacity: 1 } as any}
+                  animate={{ "--pulse-radius": "80px", opacity: 0 } as any}
+                  transition={{ duration: 0.75, ease: "easeOut" }}
+                  className={`absolute top-0 left-0 w-full min-h-full ${paddingClass} pointer-events-none select-none`}
+                  style={{
+                    ...textStyles,
+                    backgroundImage: `radial-gradient(
+                      circle var(--pulse-radius) at ${pulse.x}px ${pulse.y + 12}px,
+                      ${isDark ? 'rgba(73, 255, 255, 1)' : 'rgba(3, 145, 255, 1)'} 0%,
+                      ${isDark ? 'rgba(73, 255, 255, 0.8)' : 'rgba(3, 145, 255, 0.8)'} 30%,
+                      ${isDark ? 'rgba(73, 255, 255, 0)' : 'rgba(3, 145, 255, 0)'} 80%
+                    )`,
+                    backgroundClip: "text",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    color: "transparent",
+                    zIndex: 2,
+                  }}
+                >
+                  {value}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
+            {/* Layer 3: Invisible Measurement Tracker for Caret */}
+            <div
+              className={`absolute top-0 left-0 w-full min-h-full ${paddingClass} invisible select-none pointer-events-none`}
+              style={textStyles}
+            >
+              {value.substring(0, cursorIndex)}
+              <span ref={caretRef}>&#8203;</span>
+              {value.substring(cursorIndex)}
+            </div>
+
+            {/* Layer 3.5: Custom Fluid Glowing Caret */}
+            {isFocused && (
+              <motion.div
+                className="absolute top-0 left-0 w-[2px] rounded-full pointer-events-none z-20"
+                style={{
+                  backgroundColor: isDark ? "#49FFFF" : "#007AFF",
+                  boxShadow: `0 0 10px 1px ${isDark ? "rgba(73, 255, 255, 0.45)" : "rgba(0, 122, 255, 0.45)"}`
+                }}
+                initial={false}
+                animate={{
+                  x: caretPos.x,
+                  y: caretPos.y + (caretPos.h * 0.1),
+                  height: caretPos.h * 0.8,
+                  opacity: isTypingState ? 1 : [0, 1, 0]
+                }}
+                transition={{
+                  x: { type: "spring", stiffness: 800, damping: 35, mass: 0.5 },
+                  y: { type: "spring", stiffness: 800, damping: 35, mass: 0.5 },
+                  opacity: isTypingState
+                    ? { duration: 0.1 }
+                    : { repeat: Infinity, duration: 1.2, ease: "easeInOut" }
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Honeypot to absorb iCloud Passwords extension heuristics */}
+        <div style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }}>
+          <input type="text" tabIndex={-1} autoComplete="username" />
+          <input type="password" tabIndex={-1} autoComplete="current-password" />
+          <input type="password" tabIndex={-1} autoComplete="new-password" />
+        </div>
+
+        {/* Layer 4: Transparent Textarea capturing User Interactions */}
+        <textarea
+          ref={textAreaRef}
+          rows={1}
+          value={value}
+          onChange={handleChange}
+          onSelect={handleSelect}
+          onScroll={handleScroll}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          onKeyDown={handleKeyDown}
+          maxLength={500}
+          className="chat-pulse-textarea relative w-full px-4 py-[10px] bg-transparent resize-none outline-none focus:outline-none focus-visible:outline-none ring-0 border-none scrollbar-hide z-10"
+          style={{
+            ...textStyles,
+            color: "transparent",
+            caretColor: "transparent",
+            WebkitTapHighlightColor: "transparent",
+            minHeight: "42px",
+            maxHeight: "88px"
+          }}
+          spellCheck={false}
+          autoComplete="nope"
+          autoCorrect="off"
+          autoCapitalize="off"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-form-type="other"
+        />
+      </motion.div>
+
+      {/* Magnetic iOS Blue Send Button */}
+      <MagneticWrapper radius={36} pullForce={0.16} hoverScale={1.06} pressScale={0.94}>
+        <button
+          type="button"
+          disabled={disabled || !value.trim()}
+          onClick={handleSendClick}
+          className="bg-[#007AFF] hover:bg-[#0069D9] disabled:opacity-30 disabled:hover:bg-[#007AFF] text-white rounded-full h-[40px] w-[40px] flex items-center justify-center transition-all duration-200 active:scale-[0.96] shrink-0 cursor-pointer shadow-sm mb-[1px]"
+          aria-label="Send message"
+        >
+          <ArrowUp size={16} strokeWidth={2.75} />
+        </button>
+      </MagneticWrapper>
+    </div>
+  );
+}
+
 export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -374,7 +1563,10 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
     }
   ]);
   const [input, setInput] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  });
   const [isTyping, setIsTyping] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -383,15 +1575,40 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
   const [activeEffect, setActiveEffect] = useState<'confetti' | 'fire' | 'hearts' | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
+  const hasGame = messages.some(m => m.isGame);
+  const isSwipeDisabled = isMobile || hasGame;
+
+  // Immediately reset swipe offset if swipe is disabled
+  useEffect(() => {
+    if (isSwipeDisabled && swipeOffset !== 0) {
+      setSwipeOffset(0);
+    }
+  }, [isSwipeDisabled, swipeOffset]);
+
+  // Global safety release: ensure swipeOffset immediately resets on mouseup/touchend
+  useEffect(() => {
+    const handleGlobalRelease = () => {
+      setSwipeOffset(0);
+    };
+    window.addEventListener('pointerup', handleGlobalRelease);
+    window.addEventListener('mouseup', handleGlobalRelease);
+    window.addEventListener('touchend', handleGlobalRelease);
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalRelease);
+      window.removeEventListener('mouseup', handleGlobalRelease);
+      window.removeEventListener('touchend', handleGlobalRelease);
+    };
+  }, []);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const triggerEffectOnce = (effect: 'confetti' | 'fire' | 'hearts') => {
-    const fired = getFiredEffects();
-    if (fired.has(effect)) return;
-    markEffectAsFired(effect);
-    setActiveEffect(effect);
+    setActiveEffect(null);
+    setTimeout(() => {
+      setActiveEffect(effect);
+    }, 20);
   };
 
   // Suggestion chips scroll position tracking
@@ -441,7 +1658,18 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
     setActiveTapbackId(null);
   };
 
-  const handlePan = (_: any, info: PanInfo) => {
+  const handlePan = (e: any, info: PanInfo) => {
+    if (isSwipeDisabled) return;
+
+    const target = e?.target as HTMLElement | null;
+    if (
+      target?.tagName === 'CANVAS' ||
+      target?.closest?.('.game-card-container') ||
+      target?.closest?.('canvas')
+    ) {
+      return;
+    }
+
     if (info.offset.x < 0 && Math.abs(info.offset.x) > Math.abs(info.offset.y) * 0.4) {
       const clamped = Math.max(-65, info.offset.x * 0.65);
       setSwipeOffset(clamped);
@@ -464,7 +1692,13 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
   };
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      setIsMobile(
+        window.innerWidth < 768 ||
+        'ontouchstart' in window ||
+        navigator.maxTouchPoints > 0
+      );
+    };
     checkMobile();
     window.addEventListener('resize', checkMobile);
 
@@ -600,6 +1834,45 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
       }, 650);
     }
 
+    // 8-Ball Pool Mini-Game Trigger (like iMessage GamePigeon)
+    const isPoolTrigger =
+      lower.includes('pool') ||
+      lower.includes('8-ball') ||
+      lower.includes('8 ball') ||
+      lower.includes('billiard') ||
+      lower.includes('gamepigeon') ||
+      lower.includes('play a game') ||
+      lower.includes('mini-game') ||
+      lower.includes('minigame') ||
+      text.includes('🎱');
+
+    if (isPoolTrigger) {
+      setIsTyping(true);
+      await new Promise(r => setTimeout(r, 600));
+      setIsTyping(false);
+
+      setMessages(prev => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'alex',
+          content: "Challenge accepted! 🎱 Here's a fresh rack—drag back from the cue ball to break!",
+          created_at: new Date().toISOString(),
+          timeStr: formatMessageTime()
+        },
+        {
+          id: crypto.randomUUID(),
+          role: 'alex',
+          content: "8-Ball Pool Challenge",
+          isGame: true,
+          created_at: new Date().toISOString(),
+          timeStr: formatMessageTime(),
+          reaction: '🎱'
+        }
+      ]);
+      return;
+    }
+
     // Typing indicator state
     const showTyping = () => setIsTyping(true);
     const removeTyping = () => setIsTyping(false);
@@ -724,7 +1997,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
         />
       </div>
 
-      {/* Scoped style for dark mode typing indicator */}
+      {/* Scoped style for dark mode typing indicator & pulse textarea selection */}
       <style>{`
         ${isDark ? `
           .typing-indicator {
@@ -738,14 +2011,18 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
             background-color: #8E8E93 !important;
           }
         ` : ''}
+        .chat-pulse-textarea::selection {
+          background-color: ${isDark ? 'rgba(73, 255, 255, 0.35)' : 'rgba(0, 122, 255, 0.25)'} !important;
+          color: transparent !important;
+        }
       `}</style>
 
       {/* Main Chat Card */}
       <div
         className={`w-full max-w-[576px] rounded-[24px] box-border flex flex-col h-[520px] md:h-[560px] overflow-hidden relative justify-between transition-colors duration-500 ${
           isDark
-            ? 'border border-[rgba(255,255,255,0.1)] shadow-[0_12px_40px_rgba(0,0,0,0.6)]'
-            : 'border border-[#E5E5EA] shadow-[0_4px_20px_0_rgba(0,0,0,0.05),0_1px_2px_0_rgba(0,0,0,0.03)]'
+            ? 'bg-[#121214] border border-[rgba(255,255,255,0.1)] shadow-[0_12px_40px_rgba(0,0,0,0.6)]'
+            : 'bg-[#F9F9FB] border border-[#E5E5EA] shadow-[0_4px_20px_0_rgba(0,0,0,0.05),0_1px_2px_0_rgba(0,0,0,0.03)]'
         }`}
         style={{ backgroundColor: isDark ? '#121214' : '#F9F9FB' }}
       >
@@ -978,10 +2255,11 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
         {/* Scrollable Chat Message Area with Swipe-to-Reveal Timestamps */}
         <motion.div
           ref={containerRef}
-          onPan={handlePan}
-          onPanEnd={handlePanEnd}
-          className="flex-1 overflow-y-auto px-5 pt-[78px] pb-4 scrollbar-hide min-h-0 flex flex-col transition-colors duration-500 relative touch-pan-y select-none"
-          style={{ backgroundColor: isDark ? '#121214' : '#F9F9FB' }}
+          onPan={isSwipeDisabled ? undefined : handlePan}
+          onPanEnd={isSwipeDisabled ? undefined : handlePanEnd}
+          className={`flex-1 overflow-y-auto px-5 pt-[78px] pb-4 scrollbar-hide min-h-0 flex flex-col transition-colors duration-500 relative touch-pan-y select-none ${
+            isDark ? 'bg-[#121214]' : 'bg-[#F9F9FB]'
+          }`}
           onClick={() => {
             if (activeTapbackId) setActiveTapbackId(null);
           }}
@@ -997,7 +2275,7 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
             return (
               <motion.div
                 key={m.id}
-                animate={{ x: swipeOffset }}
+                animate={{ x: isSwipeDisabled || m.isGame ? 0 : swipeOffset }}
                 transition={{
                   type: 'spring',
                   stiffness: 450,
@@ -1093,19 +2371,22 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
                   onLongPressStart={(id) => startLongPress(id)}
                   onLongPressCancel={cancelLongPress}
                   triggerHaptic={triggerHaptic}
+                  onAlexReaction={(reaction) => handleReaction(m.id, reaction)}
                 />
 
 
 
-                {/* Swipe-revealed iOS Timestamp */}
-                <div
-                  className="absolute right-[-62px] top-1/2 -translate-y-1/2 text-[10px] font-medium tracking-tight text-[#8E8E93] select-none pointer-events-none whitespace-nowrap transition-opacity duration-150"
-                  style={{
-                    opacity: Math.min(1, Math.max(0, (Math.abs(swipeOffset) - 10) / 30))
-                  }}
-                >
-                  {m.timeStr || ''}
-                </div>
+                {/* Swipe-revealed iOS Timestamp (Desktop only, disabled during game) */}
+                {!isSwipeDisabled && (
+                  <div
+                    className="absolute right-[-62px] top-1/2 -translate-y-1/2 text-[10px] font-medium tracking-tight text-[#8E8E93] select-none pointer-events-none whitespace-nowrap transition-opacity duration-150"
+                    style={{
+                      opacity: Math.min(1, Math.max(0, (Math.abs(swipeOffset) - 10) / 30))
+                    }}
+                  >
+                    {m.timeStr || ''}
+                  </div>
+                )}
               </motion.div>
             );
           })}
@@ -1248,51 +2529,21 @@ export default function AnimatedChat({ isDark = false }: AnimatedChatProps) {
           </button>
         </div>
 
-        {/* Input Area */}
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            if (isTyping) return;
-            handleSend(input);
-          }}
-          className={`p-3 border-t flex gap-2 items-center shrink-0 transition-colors duration-500 ${
+        {/* Input Area with Animated Typing Pill */}
+        <div
+          className={`p-3 border-t flex gap-2 items-end shrink-0 transition-colors duration-500 relative z-30 ${
             isDark ? 'bg-[#1C1C1E] border-[rgba(255,255,255,0.08)]' : 'bg-white border-[#F2F2F7]'
           }`}
         >
-          <input
-            type="text"
+          <ChatAnimatedTypingInput
             value={input}
-            onChange={e => setInput(e.target.value)}
-            maxLength={500}
-            placeholder="Ask anything..."
-            className={`flex-1 text-[16px] md:text-sm rounded-full px-4 py-2 border transition-all duration-200 focus:outline-none ${
-              isDark
-                ? 'bg-[#2C2C2E] text-white placeholder-[#8E8E93] border-transparent focus:bg-[#3A3A3C] focus:border-[#007AFF]'
-                : 'bg-[#F2F2F7] text-[#1C1C1E] placeholder-[#8E8E93] border-transparent focus:bg-white focus:border-[#007AFF]'
-            }`}
+            onChange={setInput}
+            onSend={handleSend}
+            isDark={isDark}
+            disabled={isTyping}
+            triggerHaptic={triggerHaptic}
           />
-          <button
-            type="submit"
-            disabled={isTyping || !input.trim()}
-            className="bg-[#007AFF] hover:bg-[#0069D9] disabled:opacity-30 disabled:hover:bg-[#007AFF] text-white rounded-full h-9 w-9 flex items-center justify-center transition-all duration-200 active:scale-[0.96] shrink-0 cursor-pointer"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mb-[0.5px]"
-            >
-              <line x1="12" y1="19" x2="12" y2="5" />
-              <polyline points="5 12 12 5 19 12" />
-            </svg>
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   );
